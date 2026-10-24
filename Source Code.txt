@@ -1,0 +1,121 @@
+# ==========================================
+# Symptom-Based Disease Detection 
+# ==========================================
+
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.preprocessing import LabelEncoder
+
+# ---------------- Step 1: Define Symptoms and Diseases ----------------
+# General symptoms
+general_symptoms = [
+    "fever", "cough", "fatigue", "headache", "nausea", 
+    "vomiting", "diarrhea", "rash", "sore_throat", "joint_pain",
+    "abdominal_pain", "urination_problems"
+]
+
+# Female-specific symptoms
+female_symptoms = ["irregular_periods", "breast_pain"]
+
+# Male-specific symptoms
+male_symptoms = ["difficulty_urinating", "lower_back_pain"]  # prostate issues related
+
+# All symptoms for dataset
+all_symptoms = general_symptoms + female_symptoms + male_symptoms
+
+# Diseases
+diseases = [
+    "Flu", "Common Cold", "Malaria", "Migraine", "Dengue",
+    "Typhoid", "Food Poisoning", "COVID-19", "Chickenpox", "Hepatitis",
+    "Bronchitis", "Pneumonia", "Chikungunya", "Mumps", "Measles",
+    "PCOS", "Endometriosis", "Menopause", # Female-specific
+    "Prostate Issues", "Urinary Tract Infection", "Allergy", "Asthma", "Zika"
+]
+
+# ---------------- Step 2: Generate Synthetic Dataset ----------------
+np.random.seed(42)
+n_samples = 3000
+
+X_data = np.random.randint(0, 2, size=(n_samples, len(all_symptoms)))
+gender_data = np.random.randint(0, 2, size=n_samples)  # 0=Female, 1=Male
+
+y_data = []
+for g in gender_data:
+    if g == 0:  # Female
+        y_data.append(np.random.choice(diseases[:19]))  # Include female-specific
+    else:       # Male
+        y_data.append(np.random.choice([d for d in diseases if d not in ["PCOS", "Endometriosis", "Menopause"]]))
+
+# Create DataFrame
+df = pd.DataFrame(X_data, columns=all_symptoms)
+df["gender"] = gender_data
+df["disease"] = y_data
+
+# ---------------- Step 3: Encode Target ----------------
+le = LabelEncoder()
+df["disease_encoded"] = le.fit_transform(df["disease"])
+
+# Features for model
+X = df[all_symptoms + ["gender"]]
+y = df["disease_encoded"]
+
+# ---------------- Step 4: Train-Test Split ----------------
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
+
+# ---------------- Step 5: Train Model ----------------
+model = RandomForestClassifier(n_estimators=200, random_state=42)
+model.fit(X_train, y_train)
+
+# ---------------- Step 6: User Input ----------------
+print("\n👨‍⚕ Enter patient details:")
+
+# Gender
+while True:
+    gender_input = input("Enter gender (Male/Female): ").strip().capitalize()
+    if gender_input in ["Male", "Female"]:
+        gender_encoded = 1 if gender_input == "Male" else 0
+        break
+    print("Please enter 'Male' or 'Female'.")
+
+# Decide which symptoms to ask
+if gender_encoded == 0:  # Female
+    symptoms_to_ask = general_symptoms + female_symptoms
+else:  # Male
+    symptoms_to_ask = general_symptoms + male_symptoms
+
+# Collect symptom inputs
+user_input = []
+for symptom in symptoms_to_ask:
+    while True:
+        try:
+            val = int(input(f"Does the patient have {symptom.replace('_', ' ')}? (1/0): "))
+            if val in [0,1]:
+                user_input.append(val)
+                break
+            else:
+                print("Enter 1 for Yes or 0 for No.")
+        except ValueError:
+            print("Invalid input. Enter 1 or 0.")
+
+# Fill missing symptoms (for symptoms not asked due to gender) with 0
+for symptom in all_symptoms:
+    if symptom not in symptoms_to_ask:
+        user_input.insert(all_symptoms.index(symptom), 0)
+
+# Append gender
+user_input.append(gender_encoded)
+
+# ---------------- Step 7: Predict Disease ----------------
+user_df = pd.DataFrame([user_input], columns=all_symptoms + ["gender"])
+pred_code = model.predict(user_df)[0]
+pred_disease = le.inverse_transform([pred_code])[0]
+
+print("\n===============================")
+print("🔍 Predicted Disease")
+print("===============================")
+print(f"Disease: {pred_disease}")
+print("===============================")
